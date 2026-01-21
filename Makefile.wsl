@@ -1,0 +1,137 @@
+# 工具链配置（WSL 环境）
+CROSS_COMPILE = riscv32-unknown-elf-
+CC = $(CROSS_COMPILE)gcc
+AS = $(CROSS_COMPILE)as
+LD = $(CROSS_COMPILE)ld
+OBJCOPY = $(CROSS_COMPILE)objcopy
+OBJDUMP = $(CROSS_COMPILE)objdump
+SIZE = $(CROSS_COMPILE)size
+
+# QEMU 配置
+QEMU = qemu-system-riscv32
+QEMU_MACHINE = virt
+QEMU_FLAGS = -nographic -machine $(QEMU_MACHINE)
+
+# 项目配置
+TARGET = hive_node
+SDK_DIR = imc22_sdk
+BUILD_DIR = build
+
+# 编译选项
+ARCH_FLAGS = -march=rv32imac -mabi=ilp32
+OPT_FLAGS = -O2 -g
+WARN_FLAGS = -Wall -Wextra
+
+CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) \
+         -I$(SDK_DIR) \
+         -ffunction-sections -fdata-sections \
+         -ffreestanding
+
+LDFLAGS = $(ARCH_FLAGS) \
+          -T $(SDK_DIR)/linker.ld \
+          -nostartfiles \
+          -Wl,--gc-sections \
+          -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
+
+# 源文件
+SDK_SRCS = $(SDK_DIR)/startup.c \
+           $(SDK_DIR)/imc22_can.c \
+           $(SDK_DIR)/imc22_npu.c
+
+APP_SRCS ?= hive_node_ctrl.c
+
+SRCS = $(SDK_SRCS) $(APP_SRCS)
+OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
+
+# 默认目标
+all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).bin
+	@echo "========================================"
+	@echo "Build complete!"
+	@echo "========================================"
+	@$(SIZE) $(BUILD_DIR)/$(TARGET).elf
+
+# 创建构建目录
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)/$(SDK_DIR)
+	@mkdir -p $(BUILD_DIR)/tests
+	@mkdir -p $(BUILD_DIR)/examples
+
+# 编译规则
+$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
+	@echo "CC $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+# 链接规则
+$(BUILD_DIR)/$(TARGET).elf: $(OBJS)
+	@echo "LD $@"
+	@$(CC) $(LDFLAGS) $(OBJS) -o $@
+
+# 生成二进制文件
+$(BUILD_DIR)/$(TARGET).bin: $(BUILD_DIR)/$(TARGET).elf
+	@echo "OBJCOPY $@"
+	@$(OBJCOPY) -O binary $< $@
+
+# 仿真运行
+.PHONY: sim
+sim: $(BUILD_DIR)/$(TARGET).elf
+	@echo "========================================"
+	@echo "Starting QEMU simulation..."
+	@echo "Press Ctrl+A then X to exit"
+	@echo "========================================"
+	$(QEMU) $(QEMU_FLAGS) -kernel $(BUILD_DIR)/$(TARGET).elf
+
+# 带 GDB 调试
+.PHONY: sim-debug
+sim-debug: $(BUILD_DIR)/$(TARGET).elf
+	@echo "Starting QEMU with GDB server on port 1234"
+	@echo "In another terminal, run:"
+	@echo "  riscv32-unknown-elf-gdb $(BUILD_DIR)/$(TARGET).elf"
+	@echo "  (gdb) target remote localhost:1234"
+	$(QEMU) $(QEMU_FLAGS) -kernel $(BUILD_DIR)/$(TARGET).elf -s -S
+
+# 测试目标
+.PHONY: test
+test:
+	@echo "Running unit tests..."
+	@$(MAKE) test-can
+	@$(MAKE) test-npu
+	@echo "All tests completed!"
+
+# CAN 测试
+.PHONY: test-can
+test-can:
+	@echo "Building CAN test..."
+	@$(MAKE) APP_SRCS=tests/test_can.c TARGET=test_can
+	@echo "Running CAN test..."
+	@$(MAKE) sim TARGET=test_can
+
+# NPU 测试
+.PHONY: test-npu
+test-npu:
+	@echo "Building NPU test..."
+	@$(MAKE) APP_SRCS=tests/test_npu.c TARGET=test_npu
+	@echo "Running NPU test..."
+	@$(MAKE) sim TARGET=test_npu
+
+# 清理
+.PHONY: clean
+clean:
+	rm -rf $(BUILD_DIR)
+
+# 帮助
+.PHONY: help
+help:
+	@echo "========================================"
+	@echo "IMC-22 Makefile for WSL"
+	@echo "========================================"
+	@echo "Targets:"
+	@echo "  all        - Build project (default)"
+	@echo "  sim        - Run simulation"
+	@echo "  sim-debug  - Run with GDB server"
+	@echo "  test       - Run all tests"
+	@echo "  test-can   - Run CAN test"
+	@echo "  test-npu   - Run NPU test"
+	@echo "  clean      - Clean build files"
+	@echo "========================================"
+
+.PHONY: all clean sim sim-debug test help

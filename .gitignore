@@ -1,0 +1,39 @@
+# Build artifacts
+build/
+output/
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.vcd
+*.vvp
+*.log
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Vivado
+.Xil/
+*.jou
+*.pb
+*.wdb
+xsim.dir/
+
+# MLIR
+*.mlir.bc

@@ -1,0 +1,7 @@
+{
+  "active_mw": 48.8605,
+  "standby_uw": 432.5399999999999,
+  "deepsleep_nw": 88096.00000000001,
+  "clock_gating": true,
+  "target_met": false
+}

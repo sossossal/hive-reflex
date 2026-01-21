@@ -1,0 +1,36 @@
+name: FPGA CI
+
+on:
+    push:
+        branches: ["main"]
+    pull_request:
+        branches: ["main"]
+
+jobs:
+    verification:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Install Dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y verilator gtkwave python3-pip make git gcc-riscv64-unknown-elf
+
+            - name: Install Python Packages
+              run: |
+                  pip3 install cocotb pytest numpy
+
+            - name: Run MAC Unit Simulation
+              run: |
+                  cd sim
+                  # Assumes run_sim.sh is adaptable for CI or create a specific CI script
+                  # For demonstration, we just compile
+                  verilator --cc ../rtl/mac_unit.v
+
+            - name: MLIR Compiler Test
+              run: |
+                  cd mlir_compiler
+                  # Basic syntax check
+                  python3 -m py_compile optimizer.py

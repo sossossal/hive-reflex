@@ -1,0 +1,98 @@
+# Makefile 仿真扩展
+# 添加到 hive-reflex/Makefile
+
+# ========================================
+# 仿真目标
+# ========================================
+
+# QEMU 配置
+QEMU = qemu-system-riscv32
+QEMU_MACHINE = virt
+QEMU_CPU = rv32
+QEMU_FLAGS = -nographic -machine $(QEMU_MACHINE) -cpu $(QEMU_CPU)
+
+# 仿真运行
+.PHONY: sim
+sim: $(BUILD_DIR)/$(TARGET).bin
+	@echo "========================================="
+	@echo "Starting QEMU simulation..."
+	@echo "========================================="
+	$(QEMU) $(QEMU_FLAGS) -kernel $(BUILD_DIR)/$(TARGET).elf
+
+# 带 GDB 调试的仿真
+.PHONY: sim-debug
+sim-debug: $(BUILD_DIR)/$(TARGET).elf
+	@echo "========================================="
+	@echo "Starting QEMU with GDB server..."
+	@echo "Connect with: riscv32-unknown-elf-gdb $(BUILD_DIR)/$(TARGET).elf"
+	@echo "Then run: target remote localhost:1234"
+	@echo "========================================="
+	$(QEMU) $(QEMU_FLAGS) -kernel $(BUILD_DIR)/$(TARGET).elf -s -S
+
+# 性能分析仿真
+.PHONY: sim-profile
+sim-profile: $(BUILD_DIR)/$(TARGET).elf
+	@echo "Running with profiling..."
+	$(QEMU) $(QEMU_FLAGS) -kernel $(BUILD_DIR)/$(TARGET).elf \
+		-d cpu,exec,int -D $(BUILD_DIR)/qemu_profile.log
+	@echo "Profile saved to $(BUILD_DIR)/qemu_profile.log"
+
+# 测试目标
+.PHONY: test
+test:
+	@echo "========================================="
+	@echo "Running unit tests..."
+	@echo "========================================="
+	@$(MAKE) test-can
+	@$(MAKE) test-npu
+	@$(MAKE) test-control
+	@echo "All tests completed!"
+
+# CAN 测试
+.PHONY: test-can
+test-can:
+	@echo "Testing CAN driver..."
+	@$(MAKE) APP_SRCS=tests/test_can.c TARGET=test_can
+	@$(MAKE) sim TARGET=test_can
+
+# NPU 测试
+.PHONY: test-npu
+test-npu:
+	@echo "Testing NPU driver..."
+	@$(MAKE) APP_SRCS=tests/test_npu.c TARGET=test_npu
+	@$(MAKE) sim TARGET=test_npu
+
+# 控制循环测试
+.PHONY: test-control
+test-control:
+	@echo "Testing control loop..."
+	@$(MAKE) APP_SRCS=tests/test_control_loop.c TARGET=test_control
+	@$(MAKE) sim TARGET=test_control
+
+# 性能基准测试
+.PHONY: benchmark
+benchmark:
+	@echo "Running performance benchmarks..."
+	@$(MAKE) APP_SRCS=tests/benchmark.c TARGET=benchmark
+	@$(MAKE) sim-profile TARGET=benchmark
+
+# 清理测试文件
+.PHONY: clean-tests
+clean-tests:
+	rm -f $(BUILD_DIR)/test_*.elf $(BUILD_DIR)/test_*.bin
+
+# 帮助信息
+.PHONY: help-sim
+help-sim:
+	@echo "========================================="
+	@echo "IMC-22 Simulation Targets"
+	@echo "========================================="
+	@echo "sim          - Run simulation"
+	@echo "sim-debug    - Run with GDB server"
+	@echo "sim-profile  - Run with profiling"
+	@echo "test         - Run all tests"
+	@echo "test-can     - Test CAN driver"
+	@echo "test-npu     - Test NPU driver"
+	@echo "test-control - Test control loop"
+	@echo "benchmark    - Performance benchmarks"
+	@echo "========================================="

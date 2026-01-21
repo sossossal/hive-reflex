@@ -1,0 +1,57 @@
+# Windows Makefile for IMC-22
+# Simplified version for quick testing
+
+# Auto-detect RISC-V GCC path
+RISCV_ROOT = C:/Tools/riscv-gcc
+RISCV_BIN = $(shell powershell -Command "Get-ChildItem '$(RISCV_ROOT)' -Recurse -Filter riscv-none-elf-gcc.exe | Select-Object -First 1 | ForEach-Object { Split-Path $$_.FullName }")
+
+# Toolchain
+PREFIX = riscv-none-elf-
+CC = $(PREFIX)gcc
+LD = $(PREFIX)ld
+OBJCOPY = $(PREFIX)objcopy
+SIZE = $(PREFIX)size
+
+# QEMU
+QEMU = "C:/Program Files/qemu/qemu-system-riscv32.exe"
+
+# Project
+TARGET = hive_node
+BUILD = build
+
+# Flags
+CFLAGS = -march=rv32imac -mabi=ilp32 -O2 -g -Wall \
+         -Iimc22_sdk -ffreestanding
+LDFLAGS = -Timc22_sdk/linker.ld -nostartfiles
+
+# Sources
+SRCS = imc22_sdk/startup.c \
+       imc22_sdk/imc22_can.c \
+       imc22_sdk/imc22_npu.c \
+       hive_node_ctrl.c
+
+OBJS = $(SRCS:.c=.o)
+
+# Build
+all: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).bin
+	@echo Build complete!
+	@$(SIZE) $(BUILD)/$(TARGET).elf
+
+$(BUILD)/%.o: %.c
+	@if not exist $(BUILD)\imc22_sdk mkdir $(BUILD)\imc22_sdk
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/$(TARGET).elf: $(addprefix $(BUILD)/,$(OBJS))
+	@$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+$(BUILD)/$(TARGET).bin: $(BUILD)/$(TARGET).elf
+	@$(OBJCOPY) -O binary $< $@
+
+sim: $(BUILD)/$(TARGET).elf
+	@echo Running QEMU simulation...
+	$(QEMU) -nographic -machine virt -kernel $<
+
+clean:
+	@if exist $(BUILD) rmdir /s /q $(BUILD)
+
+.PHONY: all sim clean
