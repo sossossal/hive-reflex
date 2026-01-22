@@ -50,9 +50,11 @@ module mac_unit #(
             valid <= 0;
         end else if (enable) begin
             if (accumulate) begin
-                accumulator <= accumulator + product;
+                // 显式符号扩展 product 到 ACC_WIDTH 位
+                accumulator <= accumulator + {{(ACC_WIDTH-2*DATA_WIDTH){product[2*DATA_WIDTH-1]}}, product};
             end else begin
-                accumulator <= product;
+                // 显式符号扩展 product 到 ACC_WIDTH 位
+                accumulator <= {{(ACC_WIDTH-2*DATA_WIDTH){product[2*DATA_WIDTH-1]}}, product};
             end
             result <= accumulator;
             valid <= 1;
