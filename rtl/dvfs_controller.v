@@ -47,7 +47,7 @@ module dvfs_controller #(
     
     output reg [1:0] voltage_level,         // 0=DeepSleep(0.4V), 1=Standby(0.6V), 2=Active(1.0V)
     output reg [1:0] freq_divider,          // 0=/100(1MHz), 1=/10(10MHz), 2=/2(50MHz), 3=/1(100MHz)
-    output wire [3:0] freq_div_ratio,       // 实际分频比
+    output wire [7:0] freq_div_ratio,       // 实际分频比
     output reg dvfs_ready,                  // DVFS 转换完成
     output reg in_transition,               // 正在转换中
     
@@ -379,9 +379,9 @@ module dvfs_controller #(
     // ========================================================================
     
     // 分频比映射
-    assign freq_div_ratio = (freq_divider == 2'b00) ? 4'd100 :
-                            (freq_divider == 2'b01) ? 4'd10  :
-                            (freq_divider == 2'b10) ? 4'd2   : 4'd1;
+    assign freq_div_ratio = (freq_divider == 2'b00) ? 8'd100 :
+                            (freq_divider == 2'b01) ? 8'd10  :
+                            (freq_divider == 2'b10) ? 8'd2   : 8'd1;
     
     // 简化的时钟门控（实际需要用专用门控单元）
     assign gated_clk = clk_gate_enable ? 1'b0 : clk;

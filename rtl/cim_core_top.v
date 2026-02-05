@@ -29,7 +29,10 @@ module cim_core_top #(
     output wire hresp,
     
     // 中断
-    output wire irq
+    output wire irq,
+    
+    // 硬件触发
+    input wire trigger_in
 );
 
     // 内部信号
@@ -80,7 +83,10 @@ module cim_core_top #(
         .output_addr(output_addr),
         
         // 中断
-        .irq(irq)
+        .irq(irq),
+        
+        // 触发
+        .trigger_in(trigger_in)
     );
     
     // ========================================================================

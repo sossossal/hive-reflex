@@ -9,43 +9,60 @@
 
 module ahb_interconnect #(
     parameter NUM_MASTERS = 1,
-    parameter NUM_SLAVES = 3,
+    parameter NUM_SLAVES = 4,
     parameter ADDR_WIDTH = 32,
-    parameter DATA_WIDTH = 32
+    parameter DATA_WIDTH = 32,
+    parameter ENABLE_PRIORITY = 1  // 启用优先级仲裁
 )(
     input wire clk,
     input wire rst_n,
     
-    // Master 接口 (数组)
-    input wire [ADDR_WIDTH-1:0] haddr_m [0:NUM_MASTERS-1],
-    input wire [DATA_WIDTH-1:0] hwdata_m [0:NUM_MASTERS-1],
-    output reg [DATA_WIDTH-1:0] hrdata_m [0:NUM_MASTERS-1],
-    input wire hwrite_m [0:NUM_MASTERS-1],
-    input wire [2:0] hsize_m [0:NUM_MASTERS-1],
-    input wire [1:0] htrans_m [0:NUM_MASTERS-1],
-    output reg hready_m [0:NUM_MASTERS-1],
-    output reg hresp_m [0:NUM_MASTERS-1],
+    // Master 优先级配置 (每个 Master 2 bits: 0-3)
+    // 3=CPU, 2=CIM, 1=Network, 0=DMA
+    input wire [NUM_MASTERS*2-1:0] master_priority,
     
-    // Slave 接口 (输出到所有 slave)
+    // Master 接口 (Packed Arrays)
+    input wire [NUM_MASTERS*ADDR_WIDTH-1:0] haddr_m,
+    input wire [NUM_MASTERS*DATA_WIDTH-1:0] hwdata_m,
+    output reg [NUM_MASTERS*DATA_WIDTH-1:0] hrdata_m,
+    input wire [NUM_MASTERS-1:0] hwrite_m,
+    input wire [NUM_MASTERS*3-1:0] hsize_m,
+    input wire [NUM_MASTERS*2-1:0] htrans_m,
+    output reg [NUM_MASTERS-1:0] hready_m,
+    output reg [NUM_MASTERS-1:0] hresp_m,
+    
+    // Slave 接口 (Output to common slave bus, Input from slaves packed)
     output reg [ADDR_WIDTH-1:0] haddr_s,
     output reg [DATA_WIDTH-1:0] hwdata_s,
-    input wire [DATA_WIDTH-1:0] hrdata_s [0:NUM_SLAVES-1],
+    input wire [NUM_SLAVES*DATA_WIDTH-1:0] hrdata_s,
     output reg hwrite_s,
     output reg [2:0] hsize_s,
     output reg [1:0] htrans_s,
-    output reg hsel_s [0:NUM_SLAVES-1],
-    input wire hready_s [0:NUM_SLAVES-1],
-    input wire hresp_s [0:NUM_SLAVES-1]
+    output reg [NUM_SLAVES-1:0] hsel_s,
+    input wire [NUM_SLAVES-1:0] hready_s,
+    input wire [NUM_SLAVES-1:0] hresp_s
 );
 
     // 地址映射
     localparam ADDR_CIM    = 32'h5000_0000;  // Slave 0: CIM
-    localparam ADDR_SRAM   = 32'h2000_0000;  // slave 1: SRAM
+    localparam ADDR_SRAM   = 32'h2000_0000;  // Slave 1: SRAM
     localparam ADDR_PERIPH = 32'h4000_0000;  // Slave 2: 外设
-    
-    // 仲裁器 - 固定优先级
+    localparam ADDR_NET    = 32'h6000_0000;  // Slave 3: 网络控制器
+
+    // 仲裁器
+    wire [NUM_MASTERS-1:0] master_req;
+    wire [NUM_MASTERS-1:0] master_grant;
+    wire [$clog2(NUM_MASTERS)-1:0] granted_master_idx;
     integer granted_master;
     integer selected_slave;
+    
+    // 生成请求信号
+    genvar i;
+    generate
+        for (i = 0; i < NUM_MASTERS; i = i + 1) begin : gen_req
+            assign master_req[i] = (htrans_m[i*2 +: 2] != 2'b00);
+        end
+    endgenerate
     
     // 地址译码
     function integer decode_address;
@@ -55,23 +72,49 @@ module ahb_interconnect #(
                 4'h5: decode_address = 0;  // CIM
                 4'h2: decode_address = 1;  // SRAM
                 4'h4: decode_address = 2;  // 外设
+                4'h6: decode_address = 3;  // 网络控制器
+                4'h7: decode_address = 4;  // AHB-DMA (Addr 0x7000_0000)
                 default: decode_address = 1;  // 默认 SRAM
             endcase
         end
     endfunction
     
-    // 仲裁逻辑
-    always @(*) begin
-        granted_master = 0;
-        
-        // 简单优先级: Master 0 优先
-        for (integer i = 0; i < NUM_MASTERS; i = i + 1) begin
-            if (htrans_m[i] != 2'b00) begin  // IDLE
-                granted_master = i;
-                break;
+    // 优先级仲裁器实例化
+    generate
+        if (ENABLE_PRIORITY) begin : gen_priority_arbiter
+            ahb_priority_arbiter #(
+                .NUM_MASTERS(NUM_MASTERS)
+            ) arbiter (
+                .clk(clk),
+                .rst_n(rst_n),
+                .req(master_req),
+                .priority(master_priority),
+                .grant(master_grant),
+                .winner(granted_master_idx)
+            );
+            
+            assign granted_master = granted_master_idx;
+        end else begin : gen_simple_arbiter
+            // 简单仲裁逻辑 (向后兼容)
+            reg [$clog2(NUM_MASTERS)-1:0] granted_master_reg;
+            
+            always @(*) begin
+                granted_master_reg = 0;
+                begin : find_master
+                    integer found;
+                    found = 0;
+                    for (integer j = 0; j < NUM_MASTERS; j = j + 1) begin
+                        if (found == 0 && htrans_m[j*2 +: 2] != 2'b00) begin
+                            granted_master_reg = j;
+                            found = 1;
+                        end
+                    end
+                end
             end
+            
+            assign granted_master = granted_master_reg;
         end
-    end
+    endgenerate
     
     // 地址相位
     always @(*) begin
@@ -82,16 +125,14 @@ module ahb_interconnect #(
         hsize_s = 0;
         htrans_s = 2'b00;
         
-        for (integer i = 0; i < NUM_SLAVES; i = i + 1) begin
-            hsel_s[i] = 0;
-        end
+        hsel_s = 0;
         
         // 从获胜的 master 路由信号
-        haddr_s = haddr_m[granted_master];
-        hwdata_s = hwdata_m[granted_master];
+        haddr_s = haddr_m[granted_master*ADDR_WIDTH +: ADDR_WIDTH];
+        hwdata_s = hwdata_m[granted_master*DATA_WIDTH +: DATA_WIDTH];
         hwrite_s = hwrite_m[granted_master];
-        hsize_s = hsize_m[granted_master];
-        htrans_s = htrans_m[granted_master];
+        hsize_s = hsize_m[granted_master*3 +: 3];
+        htrans_s = htrans_m[granted_master*2 +: 2];
         
         // 选择 slave
         selected_slave = decode_address(haddr_s);
@@ -100,17 +141,13 @@ module ahb_interconnect #(
     
     // 数据相位 - 路由返回数据
     always @(*) begin
-        for (integer i = 0; i < NUM_MASTERS; i = i + 1) begin
-            if (i == granted_master) begin
-                hrdata_m[i] = hrdata_s[selected_slave];
-                hready_m[i] = hready_s[selected_slave];
-                hresp_m[i] = hresp_s[selected_slave];
-            end else begin
-                hrdata_m[i] = 0;
-                hready_m[i] = 1;
-                hresp_m[i] = 0;
-            end
-        end
+        hrdata_m = 0;
+        hready_m = {NUM_MASTERS{1'b1}}; // Default ready
+        hresp_m = 0;
+        
+        hrdata_m[granted_master*DATA_WIDTH +: DATA_WIDTH] = hrdata_s[selected_slave*DATA_WIDTH +: DATA_WIDTH];
+        hready_m[granted_master] = hready_s[selected_slave];
+        hresp_m[granted_master] = hresp_s[selected_slave];
     end
 
 endmodule

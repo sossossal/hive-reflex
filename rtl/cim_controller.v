@@ -40,6 +40,9 @@ module cim_controller #(
     // 中断
     output reg irq,
     
+    // 硬件触发 (Reflex)
+    input wire trigger_in,
+    
     // 稀疏控制接口 (v2.1 新增)
     output reg sparse_enable,           // 启用稀疏模式
     output reg [7:0] sparse_threshold,  // 稀疏阈值
@@ -180,7 +183,7 @@ module cim_controller #(
         
         case (state)
             IDLE: begin
-                if (ctrl_reg[CTRL_START]) begin
+                if (ctrl_reg[CTRL_START] || trigger_in) begin
                     next_state = LOAD_DATA;
                 end
             end
