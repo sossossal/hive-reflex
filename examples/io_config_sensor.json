@@ -1,0 +1,6 @@
+{
+    "i2c_count": 1,
+    "spi_count": 0,
+    "uart_count": 1,
+    "gpio_count": 4
+}

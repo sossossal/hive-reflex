@@ -1,0 +1,11 @@
+{
+  "model_name": "optimized_model",
+  "num_layers": 1,
+  "layers": [
+    {
+      "name": "fc1",
+      "type": "fc",
+      "shape": "unknown"
+    }
+  ]
+}

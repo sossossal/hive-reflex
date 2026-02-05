@@ -1,0 +1,60 @@
+{
+    "name": "vscode-hive-reflex",
+    "displayName": "Hive-Reflex Tools",
+    "description": "Developer tools for Hive-Reflex AI Chip: MLIR Compiler, Scheduler Visualization",
+    "version": "0.1.0",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Machine Learning",
+        "Visualization",
+        "Hardware"
+    ],
+    "activationEvents": [
+        "onCommand:hive-reflex.compileModel",
+        "onLanguage:c",
+        "onLanguage:python"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "hive-reflex.compileModel",
+                "title": "Hive-Reflex: Compile ONNX Model"
+            },
+            {
+                "command": "hive-reflex.showScheduler",
+                "title": "Hive-Reflex: Visualize Scheduler Graph"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "command": "hive-reflex.compileModel",
+                    "when": "resourceExtname == .onnx",
+                    "group": "hive-reflex"
+                }
+            ]
+        },
+        "configuration": {
+            "title": "Hive-Reflex",
+            "properties": {
+                "hiveReflex.compilerPath": {
+                    "type": "string",
+                    "default": "${workspaceFolder}/mlir_compiler/codegen_cim.py",
+                    "description": "Path to the CIM compiler script"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.75.0",
+        "@types/node": "^16.11.7",
+        "typescript": "^4.9.5"
+    }
+}

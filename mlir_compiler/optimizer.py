@@ -136,6 +136,8 @@ class MLIROptimizer:
             ('Conv', 'Relu'),       # Conv + ReLU → ConvRelu
             ('Gemm', 'Relu'),       # Gemm + ReLU → GemmRelu
             ('Add', 'Relu'),        # Add + ReLU → AddRelu
+            ('MatMul', 'Div'),      # MatMul + Div → MatMulScaled (Attention)
+            ('Add', 'LayerNormalization'), # Add + LayerNorm → ResidualLayerNorm
         ]
         
         nodes_to_remove = []
@@ -192,6 +194,27 @@ class MLIROptimizer:
             fused.name = f"fused_{node1.name}_{node2.name}"
             return fused
         
+        elif pattern == ('MatMul', 'Div'):
+            # MatMul + Div -> MatMulScaled
+            # Check if Div input[1] is a scalar (scaling factor)
+            # This is simplified; real implementation checks initializer
+            fused = copy.deepcopy(node1)
+            fused.op_type = "MatMulScaled" 
+            fused.output[0] = node2.output[0]
+            fused.name = f"fused_{node1.name}_{node2.name}"
+            # Preserve scaling factor input from Div
+            fused.input.append(node2.input[1]) 
+            return fused
+
+        elif pattern == ('Add', 'LayerNormalization'):
+            # Add + LayerNorm -> ResidualLayerNorm
+            fused = copy.deepcopy(node2) # Keep LayerNorm attributes
+            fused.op_type = "ResidualLayerNorm"
+            fused.input[0] = node1.input[0] # The input to Add
+            fused.input.append(node1.input[1]) # The residual connection
+            fused.name = f"fused_{node1.name}_{node2.name}"
+            return fused
+
         return None
     
     def _quantization_optimization(self, model):

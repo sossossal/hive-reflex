@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Hive-Reflex SDK",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/imc22_sdk",
+                "${workspaceFolder}/imc22_sdk/drivers",
+                "${workspaceFolder}/imc22_sdk/hal"
+            ],
+            "defines": [
+                "RISCV_CORE",
+                "IMC22_PLATFORM"
+            ],
+            "compilerPath": "",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
